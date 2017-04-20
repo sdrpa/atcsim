@@ -1,6 +1,6 @@
 # ATCSIM
 
-Simulation library. In case of a simulated enviroment the ATCSIM module takes role of [FDPS](http://github.com/sdrpa/fdps) and Tracker simulating real traffic flow.
+Simulation library. Simulates air traffic flow from a scenario.
 
 # Contributions
 
