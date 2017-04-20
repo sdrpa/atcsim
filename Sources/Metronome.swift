@@ -17,6 +17,7 @@
 import Foundation
 import Dispatch
 
+/// Metronome provides steady beat, but it doesn't know the current time
 final class Metronome {
 
     static let minimumSpeed = 1

@@ -20,7 +20,8 @@ import Foundation
 import Measure
 
 /**
- * Flight != FDPS.Flight. Flight inside ATCSIM module is internal, used for simulation.
+ Flight != FDPS.Flight. Flight inside ATCSIM module is internal, used for
+ simulation. Internal Flight type probably needs better name eg. SimulatedFlight.
  */
 struct Flight: Equatable {
 
@@ -71,5 +72,25 @@ extension Flight {
         let distance = from.distance(to: to)
         let t = Nm(distance).v / (speed.v/3600)
         return t
+    }
+}
+
+extension Flight {
+
+    func futurePosition(in delta: TimeInterval) -> Position {
+        let v = Kts(mach).v
+        let distance = Meter(Nm(v/3600.0 * delta))
+        guard let nextPoint = nextPointOnRoute(from: position) else {
+            return position
+        }
+        let coordinate = position.coordinate
+        let heading = coordinate.bearing(to: nextPoint.coordinate)
+        let newCoordinate = coordinate.coordinate(at: distance, bearing: heading)
+        return Position(coordinate: newCoordinate, altitude: position.altitude)
+    }
+
+    func updating(position newPosition: Position) -> Flight {
+        let heading = position.coordinate.bearing(to: newPosition.coordinate)
+        return Flight(callsign: callsign, squawk: squawk, position: newPosition, mach: mach, heading: heading, flightPlan: flightPlan)
     }
 }

@@ -27,19 +27,20 @@
 import Foundation
 
 /**
- Functions meant for execution whenever actions are dispatched
- from a store. The first parameter is an accessor for the
- aforementioned store's state when the middleware is run, and the
- second parameter is the action that triggered the execution.
+ Functions meant for execution whenever actions are dispatched from a store. 
+ The first parameter is an accessor for the aforementioned store's state when 
+ the middleware is run, and the second parameter is the action that triggered 
+ the execution.
  */
-public typealias Middleware<T> = ((() -> T), Action) -> Void
+public typealias Middleware<State> = (@escaping (() -> State), Action) -> Void
 
 /// A pure function that is responsible for transforming state according to action
 public typealias Reducer<State> = (State, Action) -> State
 
 /**
- The data structure responsible for holding application state, allowing controlled mutation through dispatched
- `Actions` and notifying interested parties that `subscribe` to state changes.
+ The data structure responsible for holding application state, allowing 
+ controlled mutation through dispatched `Actions` and notifying interested 
+ parties that `subscribe` to state changes.
  */
 public final class Store<State>: StoreProtocol {
 
@@ -51,15 +52,19 @@ public final class Store<State>: StoreProtocol {
         }
     }
 
-    fileprivate var subscribers: [String: (State) -> Void] // Key is a subscription token, value is a closure called whenever a new state is available
+    /// Key is a subscription token, value is a closure called whenever a new
+    /// state is available
+    fileprivate var subscribers: [String: (State) -> Void]
     fileprivate let middleware: [Middleware<State>]
 
     /**
      Initializes a `Store`.
 
      - parameter initialState: The initial value of the application state in hold.
-     - parameter middleware: A collection of functions that will be run whenever an `Action` is dispatched.
-     - parameter reducer: The root pure function that's responsible for transforming state according to `Actions`.
+     - parameter middleware: A collection of functions that will be run whenever
+        an `Action` is dispatched.
+     - parameter reducer: The root pure function that's responsible for
+        transforming state according to `Actions`.
      */
     public init (initialState: State, reducer: @escaping Reducer<State>, middleware: [Middleware<State>] = []) {
         self.state = initialState
@@ -116,22 +121,11 @@ public protocol Dispatcher {
     func dispatch(_ action: Action)
 }
 
-extension Dispatcher {
-    /**
-     Executes a closure with an injected `dispatch` function.
-     Useful for asynchronous `Action` dispatches.
-
-     - parameter thunk: The closure that will be executed with an injected `dispatch` function.
-     */
-    public func dispatch(_ thunk: (@escaping (Action) -> Void) -> Void) {
-        thunk(self.dispatch)
-    }
-}
-
 /**
  Defines a mutation descriptor. Are typically associated to application actions and operations.
  */
-public protocol Action {}
+public protocol Action {
+}
 
 /**
  Instances conforming to `Publisher` are expected to know how to add handlers that are provided with an associated
@@ -158,54 +152,6 @@ public protocol StoreProtocol: Publisher, Dispatcher {
      Returns the current `State` of the store.
      */
     var state: State { get }
-}
-
-extension StoreProtocol {
-    /**
-     Executes a closure injected with a `dispatch` function and an
-     accessor for the current `State`.
-
-     Useful for asynchronous `Action` dispatches that depend on the current
-     `State` to perform logic before dispatching actions.
-
-     - parameter thunk: The closure that will be executed injected with a `dispatch` function
-     and a `State` getter.
-     */
-    public func dispatch(_ thunk: (@escaping () -> State, @escaping (Action) -> Void) -> Void) {
-        let getState = { self.state }
-        thunk(getState, dispatch)
-    }
-}
-
-extension StoreProtocol {
-    /**
-     Maps this store into a store with the same dispatch capabilities
-     but with a transformed `State`.
-
-     Useful for selecting branches of a larger `State` tree.
-
-     - parameter transform: The transformation that will be applied to the
-     current `State`.
-     - returns: a store with the same dispatch capabilities that publishes
-     `T` instead of `State`.
-     */
-    public func map<T>(_ transform: @escaping (State) -> T) -> AnyStore<T> {
-        func subscribe(_ subscription: @escaping (T) -> Void) -> (() -> Void) {
-            return self.subscribe { state in
-                subscription(transform(state))
-            }
-        }
-
-        func dispatch(_ action: Action) {
-            self.dispatch(action)
-        }
-
-        func getState() -> T {
-            return transform(self.state)
-        }
-
-        return AnyStore(subscribe: subscribe, dispatch: dispatch, getState: getState)
-    }
 }
 
 /**
@@ -235,38 +181,5 @@ public struct AnyStore<T>: StoreProtocol {
 
     public var state: T {
         return self.getState()
-    }
-}
-
-/**
- A wrapper for asynchronous dispatches. Useful for namespacing
- long-running procedures that dispatch many `Action`
- instances asynchronously.
- */
-public protocol Command {
-    associatedtype State
-
-    /**
-     Runs an arbitrary procedure that dispatches `Action` instances
-     asynchronously.
-
-     - parameter state: A state accessor. It only makes sense
-     when this `Command` is dispatched by a `Store`.
-     - parameter dispatch: Dispatches an action.
-     */
-    func run(state: () -> State, dispatch: @escaping (Action) -> Void)
-}
-
-extension StoreProtocol {
-    /**
-     Runs a `Command` injecting the current `State` and a handle
-     for dispatching `Action` instances from this `StoreProtocol`.
-
-     - parameter command: The `Command` instance that will be run.
-     */
-    public func dispatch<C: Command>(_ command: C) where C.State == State {
-        dispatch { getState, dispatch in
-            command.run(state: getState, dispatch: dispatch)
-        }
     }
 }

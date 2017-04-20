@@ -15,7 +15,6 @@
  */
 
 import ATCKit
-import FDPS
 import Foundation
 import FoundationKit
 import Measure
@@ -23,96 +22,106 @@ import Measure
 public final class Simulation {
 
     public var runningUpdate: ((_ newValue: Bool) -> Void)?
-    public var timeUpdate: ((_ newValue: TimeInterval) -> Void)?
     public var speedUpdate: ((_ newValue: Int) -> Void)?
-    public var simulationUpdate: (([FDPS.Flight]) -> Void)?
+    public var simulationUpdate: ((SimulationResult) -> Void)?
 
     public let scenario: Scenario
 
-    fileprivate let store = SimulationStore()
+    fileprivate let store = MainStore()
     fileprivate var unsubscribe: (() -> Void)?
+    fileprivate var cache: [State] = []
 
     fileprivate var metronome: Metronome?
 
-    public var time: TimeInterval = 0 {
-        didSet {
-            self.timeUpdate?(self.time)
+    private var _timestamp: TimeInterval = 0
+    public var timestamp: TimeInterval {
+        set {
+            if let cached = cache.first(where: { $0.timestamp == newValue }) {
+                //print("\(newValue) read from cache")
+                // If we have state in cache use the cached version
+                stateDidUpdate(cached)
+                let action = MainStore.setState(cached, at: newValue)
+                store.dispatch(action)
+            } else {
+                // We don't have cached version for the given timestamp, we need to
+                // calculate up to the timestamp
+                //print("\(newValue) has to be calculated")
+                let oldValue = _timestamp
+                let delta = newValue - oldValue
+                let action = MainStore.calculate(delta, at: newValue)
+                store.dispatch(action)
+            }
+            _timestamp = newValue
+        }
+        get {
+            return _timestamp
         }
     }
     public var speed: Int {
-        set { self.metronome?.speed = newValue }
-        get { return self.metronome?.speed ?? Metronome.minimumSpeed }
+        set { metronome?.speed = newValue }
+        get { return metronome?.speed ?? Metronome.minimumSpeed }
     }
 
     public init(scenario: Scenario) {
         self.scenario = scenario
         
-        self.unsubscribe = self.store.subscribe(self.newState)
+        self.unsubscribe = store.subscribe(stateDidUpdate)
 
         for flight in scenario.flights {
-            self.store.dispatch(SimulationStore.AddFlight(flight, time: time))
+            let action = MainStore.addFlight(flight, at: timestamp)
+            store.dispatch(action)
         }
         
-        self.metronome = Metronome(event: self.simulate,
-                                   runningChanged: { [weak self] isRunning in
-                                    self?.runningUpdate?(isRunning)
+        self.metronome = Metronome(
+            event: { [weak self] in
+                self?.timestamp += 1
             },
-                                   speedChanged: { [weak self] newValue in
-                                    self?.speedUpdate?(newValue)
+            runningChanged: { [weak self] isRunning in
+                self?.runningUpdate?(isRunning)
+            },
+            speedChanged: { [weak self] newValue in
+                self?.speedUpdate?(newValue)
             }
         )
     }
 
     deinit {
-        self.unsubscribe?()
-    }
-
-    fileprivate func newState(_ state: SimulationState) {
-        self.simulationUpdate?(state.flights.map {
-            return FDPS.Flight(callsign: $0.callsign, squawk: $0.squawk, position: $0.position, mach: $0.mach, heading: $0.heading, flightPlan: $0.flightPlan)
-        })
+        unsubscribe?()
     }
 
     public func toggle() {
-        self.metronome?.toggle()
+        metronome?.toggle()
     }
 
     public func reset() {
-        self.metronome?.pause()
-        self.time = 0
+        metronome?.pause()
+        timestamp = 0
     }
+}
 
-    public func simulate(to time: TimeInterval) {
-        let delta = time - self.time
-        guard delta != 0 else { return }
-        self.simulate(delta: delta)
-    }
+fileprivate extension Simulation {
 
-    fileprivate func simulate() {
-        self.simulate(delta: 1)
-    }
-
-    fileprivate func simulate(delta: TimeInterval) {
-        self.time += delta
-        self.store.dispatch(SimulationStore.Simulate(delta: delta))
+    fileprivate func stateDidUpdate(_ state: State) {
+        cache.append(state)
+        simulationUpdate?(SimulationResult(state: state))
     }
 }
 
 fileprivate extension Simulation {
 
     func increaseTime(by interval: TimeInterval) {
-        self.time += interval
+        timestamp += interval
     }
 
     func decreaseTime(by interval: TimeInterval) {
-        self.time -= interval
+        timestamp -= interval
     }
 }
 
 public extension Simulation {
 
     public var isRunning: Bool {
-        return self.metronome?.isRunning ?? false
+        return metronome?.isRunning ?? false
     }
 
     public static var minimumSpeed: Int {

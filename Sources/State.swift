@@ -18,30 +18,30 @@ import ATCKit
 import Foundation
 import Measure
 
-struct SimulationState {
+struct State {
 
-    let time: TimeInterval
+    let timestamp: TimeInterval
     let flights: [Flight]
 
-    init(time: TimeInterval = 0, flights: [Flight] = []) {
-        self.time = time
+    init(timestamp: TimeInterval = 0, flights: [Flight] = []) {
+        self.timestamp = timestamp
         self.flights = flights
     }
 }
 
-extension SimulationState {
+extension State {
 
-    func calculatingPositions(delta: TimeInterval) -> SimulationState {
+    func calculating(delta: TimeInterval) -> State {
         let flights: [Flight] = self.flights.map { flight in
             let futurePosition = flight.futurePosition(in: delta)
             return flight.updating(position: futurePosition)
         }
-        return SimulationState(time: time + delta, flights: flights)
+        return State(timestamp: timestamp + delta, flights: flights)
     }
 
-    func adding(flight: Flight, time: TimeInterval) -> SimulationState {
+    func adding(flight: Flight, at timestamp: TimeInterval) -> State {
         var flights = self.flights
         flights.append(flight)
-        return SimulationState(time: time, flights: flights)
+        return State(timestamp: timestamp, flights: flights)
     }
 }
