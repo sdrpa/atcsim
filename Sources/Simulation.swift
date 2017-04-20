@@ -36,21 +36,12 @@ public final class Simulation {
     private var _timestamp: TimeInterval = 0
     public var timestamp: TimeInterval {
         set {
-            if let cached = cache.first(where: { $0.timestamp == newValue }) {
-                //print("\(newValue) read from cache")
-                // If we have state in cache use the cached version
-                stateDidUpdate(cached)
-                let action = MainStore.setState(cached, at: newValue)
-                store.dispatch(action)
-            } else {
-                // We don't have cached version for the given timestamp, we need to
-                // calculate up to the timestamp
-                //print("\(newValue) has to be calculated")
-                let oldValue = _timestamp
-                let delta = newValue - oldValue
-                let action = MainStore.calculate(delta, at: newValue)
-                store.dispatch(action)
-            }
+            let oldValue = _timestamp
+            let delta = newValue - oldValue
+
+            let action = MainStore.calculate(delta, at: newValue)
+            store.dispatch(action)
+
             _timestamp = newValue
         }
         get {
@@ -102,7 +93,7 @@ public final class Simulation {
 fileprivate extension Simulation {
 
     fileprivate func stateDidUpdate(_ state: State) {
-        cache.append(state)
+        //print(state.flights)
         simulationUpdate?(SimulationResult(state: state))
     }
 }

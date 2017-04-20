@@ -39,23 +39,6 @@ extension MainStore {
         }
     }
 
-    // When a state is read from cache it doesn't need to be calculated.
-    // Set store state to the cached state
-    struct setState: SIMAction {
-        var timestamp: TimeInterval
-        let state: State
-
-        init(_ state: State, at: TimeInterval) {
-            self.timestamp = at
-            self.state = state
-        }
-
-        func reduce(oldState: State) -> State {
-            print("SetState at: \(timestamp)")
-            return self.state
-        }
-    }
-
     struct addFlight: SIMAction {
         var timestamp: TimeInterval
         let flight: Flight
